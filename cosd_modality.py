@@ -2,22 +2,38 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import requests
+import gzip
+import shutil
+from io import BytesIO
 from datetime import datetime
 from sklearn.preprocessing import LabelEncoder
 
-# Load the trained model
-model_path = r'C:\Users\212068332.HCAD\Box\OF Analytics\0-Order Fulfillment Team\1. Execution\Ad Hoc Analyses\COSD Positioning\ML Models\rf_model_modality.pkl'
-model = joblib.load(model_path)
+# Download the compressed model from GitHub
+@st.cache_resource
+def download_and_load_model():
+    model_url = 'https://github.com/puravpatel3/cosd_prediction/raw/main/rf_model_modality.pkl.gz'
+    response = requests.get(model_url)
+    compressed_file = BytesIO(response.content)
+
+    # Decompress the model
+    with gzip.open(compressed_file, 'rb') as f_in:
+        model = joblib.load(f_in)
+    
+    return model
+
+# Load the model
+model = download_and_load_model()
 
 # Load the dataset to get available options and historical averages
-data_file = r'C:\Users\212068332.HCAD\Box\OF Analytics\0-Order Fulfillment Team\1. Execution\Ad Hoc Analyses\COSD Positioning\Data Outputs\cosdpos_ci_rf_modality.csv'
+data_file = r'https://github.com/puravpatel3/cosd_prediction/raw/main/cosdpos_ci_rf_modality.csv'
 df = pd.read_csv(data_file)
 
 # Normalize column names to avoid case-sensitivity issues
 df.columns = df.columns.str.lower()
 
 # Set the title of the app
-st.title('COSD Prediction Model with Modality')
+st.title('COSD Prediction Model')
 
 # User input for Eset Creation Date
 eset_creation_date = st.date_input("Eset Creation Date", value=datetime.today())
@@ -79,8 +95,8 @@ input_data = np.array([[estimated_aosd, estimated_asdd, estimated_asds, estimate
 if st.button('Predict COSD'):
     predicted_lead_time = model.predict(input_data)
     
-    # Assume confidence intervals are available as standard deviation-based bounds
-    y_std_dev = 1.96 * np.std(predicted_lead_time)  # Placeholder, adjust if needed
+    # Calculate confidence intervals (if available)
+    y_std_dev = 1.96 * np.std(predicted_lead_time)  # Placeholder, adjust based on model
     confidence_interval_lower = predicted_lead_time - y_std_dev
     confidence_interval_upper = predicted_lead_time + y_std_dev
 

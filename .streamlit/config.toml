@@ -2,3 +2,6 @@
 headless = true
 port = $PORT
 enableCORS = false
+
+[runtime]
+python_version = "3.10"

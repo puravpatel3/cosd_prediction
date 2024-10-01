@@ -1,12 +1,14 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
 import requests
 import gzip
+import shutil
 from io import BytesIO
 from datetime import datetime
-from sklearn.preprocessing import LabelEncoder
+import statistics
+import math
+from sklearn.preprocessing import LabelEncoder  # Add this missing import
 
 # Download the compressed model from GitHub
 @st.cache_resource
@@ -50,19 +52,17 @@ def estimate_lead_times(modality, country, customer_class_new):
         (df['customer class new'] == customer_class_new)
     ]
     
-    # Calculate average lead times
-    avg_aosd = filtered_df['lead_time_from_ecd_to_aosd'].mean()
-    avg_asdd = filtered_df['lead_time_from_ecd_to_asdd'].mean()
-    avg_asds = filtered_df['lead_time_from_ecd_to_asds'].mean()
-    avg_procure_date = filtered_df['lead_time_from_ecd_to_procure_date'].mean()
+    # Calculate average lead times using `statistics.mean` instead of `numpy.mean`
+    def safe_mean(column):
+        values = filtered_df[column].dropna().tolist()
+        return statistics.mean(values) if values else 30  # Default value if no data
+
+    avg_aosd = safe_mean('lead_time_from_ecd_to_aosd')
+    avg_asdd = safe_mean('lead_time_from_ecd_to_asdd')
+    avg_asds = safe_mean('lead_time_from_ecd_to_asds')
+    avg_procure_date = safe_mean('lead_time_from_ecd_to_procure_date')
     
-    # Return the average values (use default if no data is available)
-    return (
-        avg_aosd if not np.isnan(avg_aosd) else 30,
-        avg_asdd if not np.isnan(avg_asdd) else 30,
-        avg_asds if not np.isnan(avg_asds) else 30,
-        avg_procure_date if not np.isnan(avg_procure_date) else 30
-    )
+    return avg_aosd, avg_asdd, avg_asds, avg_procure_date
 
 # Estimate lead times based on user inputs
 estimated_aosd, estimated_asdd, estimated_asds, estimated_procure_date = estimate_lead_times(modality, country, customer_class_new)
@@ -87,15 +87,15 @@ country_encoded = le_country.transform([country])[0]
 customer_class_new_encoded = le_customer_class.transform([customer_class_new])[0]
 
 # Create input array for prediction
-input_data = np.array([[estimated_aosd, estimated_asdd, estimated_asds, estimated_procure_date,
-                        modality_encoded, country_encoded, customer_class_new_encoded]])
+input_data = [[estimated_aosd, estimated_asdd, estimated_asds, estimated_procure_date,
+               modality_encoded, country_encoded, customer_class_new_encoded]]
 
 # Perform prediction using the model
 if st.button('Predict COSD'):
     predicted_lead_time = model.predict(input_data)
-    
-    # Calculate confidence intervals (if available)
-    y_std_dev = 1.96 * np.std(predicted_lead_time)  # Placeholder, adjust based on model
+
+    # Calculate confidence intervals using basic math (if needed)
+    y_std_dev = 1.96 * math.sqrt(sum([(i - statistics.mean(predicted_lead_time))**2 for i in predicted_lead_time]) / len(predicted_lead_time))
     confidence_interval_lower = predicted_lead_time - y_std_dev
     confidence_interval_upper = predicted_lead_time + y_std_dev
 
